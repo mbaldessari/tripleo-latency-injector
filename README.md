@@ -27,3 +27,8 @@ The above config file will generate the following latencies:
 * 100ms between Controllers and Computes
 * 200ms between Computes and CephStorage nodes
 * 300ms between Controller and CephStorage nodes
+
+Once the ```./generateqos.py``` script is run under the ```output``` folder you
+will find the ```output/distribute-tc-scripts.sh``` script. Run it
+and it will copy all the right tc scripts to all nodes and it will run said script
+to inject the latencies.
