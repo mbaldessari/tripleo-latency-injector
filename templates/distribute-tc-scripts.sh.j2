@@ -1,0 +1,8 @@
+#!/bin/bash
+set -x
+
+{% for host, ip in hosts.iteritems() %}
+scp {{ outputdir }}/{{ host }}-tc.sh {{ ip }}:/tmp
+ssh {{ ip }} "sudo mv /tmp/{{ host }}-tc.sh" /root
+# ssh {{ ip }} "sudo /root/{{ host }}-tc.sh" 
+{% endfor %}

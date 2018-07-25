@@ -1,0 +1,9 @@
+#DefaultLatency: 5ms
+IntraRoleLatency:
+  Controller: 20ms
+  Compute: 10ms
+#  CephStorage: 2ms
+InterRoleLatency:
+  Controller_Compute: 100ms
+#  Compute_CephStorage: 200ms
+#  Controller_CephStorage: 300ms

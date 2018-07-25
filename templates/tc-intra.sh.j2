@@ -1,0 +1,43 @@
+#!/bin/bash
+set -x
+
+## Queuing script for "{{ title }}"
+
+TC="/usr/sbin/tc"
+CLASSID="1600"
+RATE1="1000000kbit"
+RATE2="1000000Kbit"
+
+function get_nic_from_ip() {
+  # Example output from "ip -o r get <ip>":
+  # 172.16.1.20 dev vlan30 src 172.16.1.9 \    cache 
+  ip=$1
+  ret=$(ip -o r get ${ip} | awk '{ print $3 }')
+  echo "$ret"
+}
+
+
+for ip in all_ips:
+  nic=get_nic_from_ip $ip
+  tc qdisc del dev "$interface" root handle $r_handle:;
+done
+
+$TC qdisc add dev eno1 root handle $CLASSID: htb default 1
+$TC class add dev eno1 parent $CLASSID: classid $CLASSID:1 htb rate $RATE1
+{% set seqcount = 1 %}
+{% set handlecount = 1500 %}
+{% for ip in ips %}
+nic=get_nic_from_ip {{ ip }}
+$TC class add dev $nic parent $CLASSID: classid $CLASSID:{{ seqcount + loop.index }} htb rate $RATE2 ceil $RATE2
+$TC qdisc add dev $nic parent $CLASSID:{{ seqcount + loop.index }} handle {{ handlecount + loop.index }}: netem delay {{ latency }}
+$TC filter add dev $nic protocol ip parent $CLASSID: prio 2 u32 match ip dst {{ ip }}/32 match ip src 0.0.0.0/0 flowid $CLASSID:{{ seqcount + loop.index }}
+{% endfor %}
+
+
+
+$TC class add dev eno1 parent 1663: classid 1663:3 htb rate 1000000Kbit ceil 1000000Kbit
+$TC qdisc add dev eno1 parent 1663:3 handle 16e4: netem delay {{ latency }}
+$TC filter add dev eno1 protocol ip parent 1663: prio 2 u32 match ip dst 172.16.11.51/32 match ip src 0.0.0.0/0 flowid 1663:3
+
+
+
