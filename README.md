@@ -32,3 +32,14 @@ Once the ```./generateqos.py``` script is run under the ```output``` folder you
 will find the ```output/distribute-tc-scripts.sh``` script. Run it
 and it will copy all the right tc scripts to all nodes and it will run said script
 to inject the latencies.
+
+After running the ```distribute-tc-scripts.sh``` you will be able to confirm the
+new latencies:
+```
+[root@compute-0 ~]# ping controller-0
+PING controller-0.localdomain (172.17.1.16) 56(84) bytes of data.
+64 bytes from controller-0.localdomain (172.17.1.16): icmp_seq=1 ttl=64 time=100 ms
+64 bytes from controller-0.localdomain (172.17.1.16): icmp_seq=2 ttl=64 time=100 ms
+```
+
+If you want to remove those latencies on each node run the script ```/root/<nodename>-tc.sh --reset```
