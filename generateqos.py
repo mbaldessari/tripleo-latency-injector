@@ -16,7 +16,7 @@ handler = logging.StreamHandler()
 formatter = logging.Formatter('%(levelname)-8s %(message)s')
 handler.setFormatter(formatter)
 logger.addHandler(handler)
-logger.setLevel(logging.INFO)
+logger.setLevel(logging.DEBUG)
 
 class Inventory(object):
     def __init__(self, inventory, latencyfile):
@@ -282,7 +282,6 @@ def generate_distribution_script(inventory):
     d = {}
     d['hosts'] = t
     d['outputdir' ] = OUTPUTDIR
-   
     f = open(os.path.join(OUTPUTDIR, "distribute-tc-scripts.sh"), "w")
     f.write(j2_env.get_template('distribute-tc-scripts.sh.j2').render(d))
     f.close()

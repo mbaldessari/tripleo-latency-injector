@@ -1,43 +1,67 @@
 #!/bin/bash
-set -x
+set -e
 
-## Queuing script for "{{ title }}"
+## Queuing script for "{{ host }}"
 
 TC="/usr/sbin/tc"
-CLASSID="1600"
-RATE1="1000000kbit"
-RATE2="1000000Kbit"
+RATE="1000Mbps"
+
 
 function get_nic_from_ip() {
   # Example output from "ip -o r get <ip>":
   # 172.16.1.20 dev vlan30 src 172.16.1.9 \    cache 
   ip=$1
-  ret=$(ip -o r get ${ip} | awk '{ print $3 }')
+  # dciabrin's clever hack to print the interface after the 'dev' keyword
+  ret=$(ip -o r get ${ip} | sed -n 's/.*dev \([^ ]*\).*/\1/p')
   echo "$ret"
 }
 
+function get_all_nics() {
+  declare -A nics
 
-for ip in all_ips:
-  nic=get_nic_from_ip $ip
-  tc qdisc del dev "$interface" root handle $r_handle:;
+  for ip in {{ other_ips }}; do
+    nic=$(get_nic_from_ip "$ip")
+    if [ $nic != "lo" ]; then
+      nics["$nic"]="foo"
+    fi
+  done
+  echo "${!nics[@]}"
+}
+
+all_nics=$(get_all_nics)
+
+echo "Resetting state"
+for nic in $all_nics; do
+  echo "Removing qdiscs on nic: $nic"
+  $TC qdisc del dev $nic root || /bin/true
+done
+echo "Flush mangle/OUTPUT table"
+iptables -t mangle -F OUTPUT
+
+if [ "x$1" == "x--reset" ]; then
+  echo "Only resetting state. Exiting"
+  exit 0
+fi
+
+
+echo "All the nics involved in latency changes are: $all_nics"
+
+# Sets latency qdiscs on all involved nics
+for nic in $all_nics; do
+  echo "Setting up qdiscs for nic: $nic"
+  $TC qdisc add dev $nic handle 1: root htb
+  # Here we add separate qdiscs for each different latency
+{% set seqcount = 15 %}
+{% for latency, mark in all_latencies.iteritems() %}
+
+  # *** {{ latency }} -> Mark: {{ mark }} ***
+  $TC class add dev $nic parent 1: classid 1:{{ seqcount + loop.index}} htb rate $RATE
+  $TC qdisc add dev $nic parent 1:{{ seqcount + loop.index }} handle {{ mark }} netem delay {{ latency }}
+  $TC filter add dev $nic parent 1:0 prio 1 protocol ip handle {{ mark }} fw flowid 1:{{ seqcount + loop.index }}
+{% endfor %}
 done
 
-$TC qdisc add dev eno1 root handle $CLASSID: htb default 1
-$TC class add dev eno1 parent $CLASSID: classid $CLASSID:1 htb rate $RATE1
-{% set seqcount = 1 %}
-{% set handlecount = 1500 %}
-{% for ip in ips %}
-nic=get_nic_from_ip {{ ip }}
-$TC class add dev $nic parent $CLASSID: classid $CLASSID:{{ seqcount + loop.index }} htb rate $RATE2 ceil $RATE2
-$TC qdisc add dev $nic parent $CLASSID:{{ seqcount + loop.index }} handle {{ handlecount + loop.index }}: netem delay {{ latency }}
-$TC filter add dev $nic protocol ip parent $CLASSID: prio 2 u32 match ip dst {{ ip }}/32 match ip src 0.0.0.0/0 flowid $CLASSID:{{ seqcount + loop.index }}
+echo "Marking all packets to destination with proper MARK"
+{% for ip, mark in latencies.iteritems() %}
+iptables -A OUTPUT -t mangle -d {{ ip }} -j MARK --set-mark {{ mark[1] }} -m comment --comment "delay {{ mark[0] }} from {{ host }} to {{ mark[2] }}"
 {% endfor %}
-
-
-
-$TC class add dev eno1 parent 1663: classid 1663:3 htb rate 1000000Kbit ceil 1000000Kbit
-$TC qdisc add dev eno1 parent 1663:3 handle 16e4: netem delay {{ latency }}
-$TC filter add dev eno1 protocol ip parent 1663: prio 2 u32 match ip dst 172.16.11.51/32 match ip src 0.0.0.0/0 flowid 1663:3
-
-
-
